@@ -271,6 +271,154 @@ $(document).ready(function () {
     col.parseLinks.restore();
   });
 
+  test("store", 35, function () {
+
+    var col = new (Backbone.PageableCollection.extend({
+      url: "url"
+    }))(null, {
+      state: {
+        pageSize: 2
+      },
+      store: {
+        length: 4
+      },
+      mode: "infinite"
+    });
+
+    sinon.spy(col, "parse");
+    sinon.stub(col, "parseLinks").returns({next: "url2"});
+
+    var currentPageResetEventCount = 0;
+    col.on("reset", function () {
+      currentPageResetEventCount++;
+    });
+
+    var fullCollectionAddEventCount = 0;
+    col.fullCollection.on("add", function () {
+      fullCollectionAddEventCount++;
+    });
+
+    var fullCollectionRemoveEventCount = 0;
+    col.fullCollection.on("remove", function () {
+      fullCollectionRemoveEventCount++;
+    });
+
+    var fullCollectionResetEventCount = 0;
+    col.fullCollection.on("reset", function () {
+      fullCollectionResetEventCount++;
+    });
+
+    // collection gets the first page then proceeds two pages forward
+    // this should leave it still with a full collection size not exceeding
+    // store.length parameter
+    col.getFirstPage({success: function () {
+      strictEqual(col.fullCollection.length, 2);
+      deepEqual(col.links, {
+        "1": "url",
+        "2": "url2"
+      });
+      deepEqual(col.toJSON(), [{id: 1}, {id: 2}]);
+      deepEqual(col.fullCollection.toJSON(), [{id: 1}, {id: 2}]);
+    }});
+    this.ajaxSettings.success([
+      {id: 1},
+      {id: 2}
+    ]);
+
+    col.parseLinks.returns({next: "url3"});
+    col.getNextPage({success: function () {
+      strictEqual(col.fullCollection.length, 4);
+      deepEqual(col.links, {
+        "1": "url",
+        "2": "url2",
+        "3": "url3"
+      });
+      deepEqual(col.toJSON(), [{id: 3}, {id: 4}]);
+      deepEqual(col.fullCollection.toJSON(), [{id: 1}, {id: 2}, {id: 3}, {id: 4}]);
+    }});
+    this.ajaxSettings.success([
+      {id: 3},
+      {id: 4}
+    ]);
+
+    col.parseLinks.returns({next: "url4"});
+    col.getNextPage({success: function () {
+      strictEqual(col.fullCollection.length, 4);
+      deepEqual(col.links, {
+        "1": "url",
+        "2": "url2",
+        "3": "url3",
+        "4": "url4"
+      });
+      deepEqual(col.toJSON(), [{id: 5}, {id: 6}]);
+      deepEqual(col.fullCollection.toJSON(), [{id: 3}, {id: 4}, {id: 5}, {id: 6}]);
+    }});
+    this.ajaxSettings.success([
+      {id: 5},
+      {id: 6}
+    ]);
+
+    equal(currentPageResetEventCount, 3);
+    equal(fullCollectionAddEventCount, 6);
+    equal(fullCollectionRemoveEventCount, 2);
+    equal(fullCollectionResetEventCount, 0);
+    equal(col.parse.callCount, 3);
+    currentPageResetEventCount = 0;
+    fullCollectionAddEventCount = 0;
+    fullCollectionRemoveEventCount = 0;
+    fullCollectionResetEventCount = 0;
+    col.parse.reset();
+    col.parseLinks.reset();
+
+    // moving backward loads one page from cache and one page from remote
+
+    col.getPreviousPage();
+    strictEqual(col.parseLinks.called, false);
+    strictEqual(col.fullCollection.length, 4);
+    deepEqual(col.links, {
+      "1": "url",
+      "2": "url2",
+      "3": "url3",
+      "4": "url4"
+    });
+    deepEqual(col.toJSON(), [{id: 3}, {id: 4}]);
+    deepEqual(col.fullCollection.toJSON(), [{id: 3}, {id: 4}, {id: 5}, {id: 6}]);
+    equal(currentPageResetEventCount, 1);
+    equal(fullCollectionAddEventCount, 0);
+    equal(fullCollectionRemoveEventCount, 0);
+    equal(fullCollectionResetEventCount, 0);
+    currentPageResetEventCount = 0;
+
+    col.parseLinks.returns({next: "url2"});
+    col.getPreviousPage({success: function () {
+      strictEqual(col.fullCollection.length, 4);
+      deepEqual(col.links, {
+        "1": "url",
+        "2": "url2",
+        "3": "url3",
+        "4": "url4"
+      });
+      deepEqual(col.toJSON(), [{id: 1}, {id: 2}]);
+      deepEqual(col.fullCollection.toJSON(), [{id: 1}, {id: 2}, {id: 3}, {id: 4}]);
+    }});
+    this.ajaxSettings.success([
+      {id: 1},
+      {id: 2}
+    ]);
+
+    equal(currentPageResetEventCount, 1);
+    equal(fullCollectionAddEventCount, 2);
+    equal(fullCollectionRemoveEventCount, 2);
+    equal(fullCollectionResetEventCount, 0);
+    equal(col.parse.callCount, 1);
+    currentPageResetEventCount = 0;
+    fullCollectionAddEventCount = 0;
+    fullCollectionRemoveEventCount = 0;
+    fullCollectionResetEventCount = 0;
+    col.parse.reset();
+    col.parseLinks.reset();
+  });
+
   test("hasNextPage and hasPreviousPage", function () {
     var col = new (Backbone.PageableCollection.extend({
       url: "url"
